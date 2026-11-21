@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#10131b">
+<title>FEXTOH CAR RACING</title>
+<style>
+*{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#10131b;color:#fff;font-family:Arial,sans-serif;touch-action:none}
+#game{position:relative;width:100%;height:100%;max-width:560px;margin:auto;background:linear-gradient(#6eb7e8 0 34%,#477d38 34% 100%);overflow:hidden}
+#hud{position:absolute;z-index:5;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}
+.badge{background:#111a;color:#fff;padding:9px 12px;border:1px solid #ffffff55;border-radius:12px;font-weight:700;font-size:14px}
+#road{position:absolute;left:15%;width:70%;height:100%;top:0;background:linear-gradient(90deg,#555,#777 50%,#555);clip-path:polygon(22% 0,78% 0,100% 100%,0 100%)}
+#road:before,#road:after{content:"";position:absolute;top:0;height:100%;width:5px;background:#fff9}
+#road:before{left:22%}#road:after{right:22%}
+.lane{position:absolute;top:-100%;height:200%;width:7px;background:repeating-linear-gradient(to bottom,#fff 0 45px,transparent 45px 90px);opacity:.9}
+#lane1{left:39%}#lane2{left:61%}
+#lines{position:absolute;inset:0;animation:roadmove .55s linear infinite;animation-play-state:paused}
+@keyframes roadmove{to{transform:translateY(90px)}}
+.car{position:absolute;width:48px;height:82px;border-radius:13px 13px 9px 9px;z-index:3;box-shadow:0 5px 8px #0008;border:3px solid #222}
+.car:before{content:"";position:absolute;left:8px;right:8px;top:13px;height:25px;border-radius:6px;background:#bdeaff}
+.car:after{content:"";position:absolute;left:-5px;right:-5px;bottom:10px;height:9px;background:#222;border-radius:4px}
+#player{background:linear-gradient(90deg,#e65c00,#ff9b20,#d94b00);bottom:105px;left:calc(50% - 24px)}
+.enemy{background:linear-gradient(90deg,#1747a5,#4d8cff,#153b8c)}
+#controls{position:absolute;z-index:6;bottom:18px;left:0;right:0;display:flex;justify-content:space-between;padding:0 22px}
+button{border:0;border-radius:15px;background:#ff8500;color:white;font-weight:800;font-size:20px;padding:15px 24px;box-shadow:0 4px 0 #a94d00;touch-action:none}
+button:active{transform:translateY(3px);box-shadow:0 1px 0 #a94d00}
+#overlay{position:absolute;z-index:10;inset:0;background:#080b12d9;display:flex;align-items:center;justify-content:center;text-align:center;padding:25px}
+.panel{max-width:340px;background:#171d29;border:1px solid #ffffff33;border-radius:22px;padding:25px;box-shadow:0 15px 40px #0008}
+h1{margin:0 0 8px;color:#ff941f;font-size:29px}p{line-height:1.5;color:#d7deea}
+#start{margin-top:8px;background:#ff8500}
+.small{font-size:12px;color:#aeb9c9}
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="road"><div id="lines"><div class="lane" id="lane1"></div><div class="lane" id="lane2"></div></div></div>
+  <div id="hud"><div class="badge">SCORE: <span id="score">0</span></div><div class="badge">SPEED: <span id="speed">1</span></div></div>
+  <div id="player" class="car"></div>
+  <div id="controls"><button id="left">◀ LEFT</button><button id="right">RIGHT ▶</button></div>
+  <div id="overlay"><div class="panel"><h1>FEXTOH<br>CAR RACING</h1><p>Dodge the traffic, stay on the road and get the highest score!</p><p class="small">Use the LEFT and RIGHT buttons to steer.</p><button id="start">START RACE</button></div></div>
+</div>
+<script>
+const game=document.getElementById('game'), player=document.getElementById('player');
+const overlay=document.getElementById('overlay'), scoreEl=document.getElementById('score'), speedEl=document.getElementById('speed'), lines=document.getElementById('lines');
+let running=false, score=0, speed=3, playerX=0, enemies=[], lastSpawn=0, lastTime=0, keys={left:false,right:false};
+function roadBounds(){const w=game.clientWidth;return {min:w*.15+45,max:w*.85-45};}
+function setPlayer(){player.style.left=playerX+'px';}
+function startGame(){
+  enemies.forEach(e=>e.el.remove()); enemies=[]; score=0;speed=3;lastSpawn=0;
+  const b=roadBounds();playerX=game.clientWidth/2-24;playerX=Math.max(b.min,Math.min(b.max,playerX));setPlayer();
+  scoreEl.textContent='0';speedEl.textContent='1';overlay.style.display='none';running=true;lines.style.animationPlayState='running';lastTime=performance.now();requestAnimationFrame(loop);
+}
+function spawnEnemy(){
+  const b=roadBounds(), lanes=[game.clientWidth*.36-24,game.clientWidth*.5-24,game.clientWidth*.64-24];
+  const x=lanes[Math.floor(Math.random()*lanes.length)];
+  const el=document.createElement('div');el.className='car enemy';el.style.left=Math.max(b.min,Math.min(b.max,x))+'px';el.style.top='-95px';game.appendChild(el);
+  enemies.push({el,y:-95});
+}
+function hit(a,b){return a.left<b.right-7&&a.right>b.left+7&&a.top<b.bottom-8&&a.bottom>b.top+8;}
+function endGame(){
+  running=false;lines.style.animationPlayState='paused';
+  overlay.style.display='flex';overlay.querySelector('h1').innerHTML='RACE OVER';
+  overlay.querySelector('p').textContent='Your score: '+score+'. Ready for another race?';
+  document.getElementById('start').textContent='RACE AGAIN';
+}
+function loop(t){
+  if(!running)return;const dt=Math.min((t-lastTime)/16.67,2);lastTime=t;
+  const b=roadBounds();if(keys.left)playerX-=5.5*dt;if(keys.right)playerX+=5.5*dt;playerX=Math.max(b.min,Math.min(b.max,playerX));setPlayer();
+  speed=3+Math.min(score/150,5);speedEl.textContent=Math.round(speed/3);
+  lastSpawn+=t-(loop.last||t);loop.last=t;if(lastSpawn>Math.max(430,1050-score*2)){spawnEnemy();lastSpawn=0;}
+  const pr=player.getBoundingClientRect();
+  for(let i=enemies.length-1;i>=0;i--){const e=enemies[i];e.y+=speed*dt;e.el.style.top=e.y+'px';
+    if(hit(pr,e.el.getBoundingClientRect())){endGame();return;}
+    if(e.y>game.clientHeight){e.el.remove();enemies.splice(i,1);score+=10;scoreEl.textContent=score;}
+  }
+  requestAnimationFrame(loop);
+}
+function bind(id,key){const btn=document.getElementById(id);btn.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;});['pointerup','pointercancel','pointerleave'].forEach(ev=>btn.addEventListener(ev,()=>keys[key]=false));}
+bind('left','left');bind('right','right');
+document.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;if(e.key==='ArrowRight'||e.key==='d')keys.right=true;});
+document.addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;});
+document.getElementById('start').addEventListener('click',startGame);
+window.addEventListener('resize',()=>{if(!running){playerX=game.clientWidth/2-24;setPlayer();}});
+</script>
+</body>
+</html>
